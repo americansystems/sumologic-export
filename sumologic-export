@@ -27,6 +27,9 @@ from os import chmod, mkdir
 from os.path import exists, expanduser
 from subprocess import call
 from time import sleep
+from queue import Queue
+from threading import Thread
+from gzip import open as gopen
 
 from docopt import docopt
 from requests import get, post
@@ -45,10 +48,10 @@ class Exporter(object):
     """Abstraction for exporting Sumologic logs."""
 
     # Partition name to query (or *)
-    PARTITION = '*'
+    PARTITION = 'zscaler'
 
     # Default time increment to move forward by.
-    INCREMENT = timedelta(minutes=30)
+    INCREMENT = timedelta(minutes=5)
 
     # Default timerange to use if no dates are specified.
     DEFAULT_TIMERANGE = timedelta(days=30)
@@ -68,11 +71,14 @@ class Exporter(object):
 
     # Amount of time to pause before requesting Sumologic logs.  60 seconds
     # seems to be a good amount of time.
-    SLEEP_SECONDS = 10
+    SLEEP_SECONDS = 5
 
     # The amount of logs to download from Sumologic per page.  The higher this
     # is, the more memory is used, but the faster the exports are.
     MESSAGES_PER_PAGE = 10000
+
+    # Number of threads to create
+    THREADS = 10
 
     def __init__(self):
         """
@@ -152,10 +158,27 @@ class Exporter(object):
         print('--------------')
 
         date = self.start
+        q = Queue()
         while date < self.stop:
 
+            # Queue up the parts of the job
+            job = (date, date + self.INCREMENT)
+            q.put(job)
+            date += self.INCREMENT
+
+        for i in range(self.THREADS):
+            t = Thread(target=self.threaded_jobs, args=(q,))
+            t.daemon = True
+            t.start()
+        q.join()
+        print('\nFinished downloading logs!')
+    
+    def threaded_jobs(self, q):
+        while not q.empty():
+            job = q.get()
+            date = job[0]
             # Schedule the Sumologic job.
-            job_url = self.create_job(date, date + self.INCREMENT)
+            job_url = self.create_job(job[0], job[1])
             print('-', prettify(date))
 
             # Pause to allow Sumologic to process this job.
@@ -172,19 +195,13 @@ class Exporter(object):
                 for log in self.get_logs(job_url, total_logs):
                     logs.append(log)
 
-                print(f' - Writing log file: exports/{prettify(date)}.json')
-                with open(f'exports/{prettify(date)}.json', 'w') as exports:
-                    exports.write(dumps(logs, indent=2, sort_keys=True))
+                print(f' - Writing log file: exports/{prettify(date)}.json.gz')
+                with gopen(f'exports/{prettify(date)}.json.gz', 'w') as exports:
+                    exports.write(dumps(logs, indent=2, sort_keys=True).encode())
 
-                print(f' - Compressing log file: exports/{prettify(date)}.json')
-                call(['gzip', '-9', f'exports/{prettify(date)}.json'])
             else:
                 print(' - No logs found.')
-
-            # Move forward.
-            date += self.INCREMENT
-
-        print('\nFinished downloading logs!')
+            q.task_done()
 
     def create_job(self, start, stop):
         """
@@ -216,7 +233,6 @@ class Exporter(object):
                     self.cookies = resp.cookies
 
                 if resp.status_code == 202:
-                    print('%s/%s' % (self.SUMOLOGIC_URL, resp.json()['id']))
                     return '%s/%s' % (self.SUMOLOGIC_URL, resp.json()['id'])
 
                 raise
@@ -243,10 +259,8 @@ class Exporter(object):
                 )
                 if resp.cookies:
                     self.cookies = resp.cookies
-                print(resp.status_code)
                 if resp.status_code == 200:
                     json = resp.json()
-                    print(json['state'])
                     if json['state'] == 'DONE GATHERING RESULTS':
                         return json['messageCount']
 
@@ -267,7 +281,6 @@ class Exporter(object):
         """
         for page in range(0, int(count / self.MESSAGES_PER_PAGE) + 1):
             while True:
-                print(f'fetching page {page} of {count/self.MESSAGES_PER_PAGE}')
                 try:
                     resp = get(
                         job_url + '/messages',
@@ -282,7 +295,6 @@ class Exporter(object):
                     )
                     if resp.cookies:
                         self.cookies = resp.cookies
-                    print(resp.status_code)
                     if resp.status_code == 200:
                         json = resp.json()
                         for log in json['messages']:
@@ -292,7 +304,6 @@ class Exporter(object):
 
                     raise
                 except:
-                    print('exception')
                     sleep(1)
 
 
