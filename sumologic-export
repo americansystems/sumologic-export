@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 """
 sumologic-export
 ~~~~~~~~~~~~~~~~
@@ -16,8 +16,10 @@ Usage:
     sumologic-export (-v | --version)
 
 Written by Randall Degges (http://www.rdegges.com)
+Updated by Caleb Fogleman
 """
 
+from __future__ import print_function
 
 from datetime import datetime, timedelta
 from json import dumps, loads
@@ -31,39 +33,42 @@ from requests import get, post
 
 
 ##### GLOBALS
-VERSION = '0.0.2'
+VERSION = '0.0.3'
 CONFIG_FILE = expanduser('~/.sumo')
 
 
 # Pretty print datetime objects.
-prettify = lambda x: x.strftime('%Y-%m-%d')
+prettify = lambda x: x.strftime('%Y-%m-%dT%H:%M:%S')
 
 
 class Exporter(object):
     """Abstraction for exporting Sumologic logs."""
 
+    # Partition name to query (or *)
+    PARTITION = '*'
+
     # Default time increment to move forward by.
-    INCREMENT = timedelta(days=1)
+    INCREMENT = timedelta(minutes=30)
 
     # Default timerange to use if no dates are specified.
     DEFAULT_TIMERANGE = timedelta(days=30)
 
     # Sumologic API constants.
-    SUMOLOGIC_URL = 'https://api.sumologic.com/api/v1/search/jobs'
+    SUMOLOGIC_URL = 'https://api.us2.sumologic.com/api/v1/search/jobs'
     SUMOLOGIC_HEADERS = {
         'content-type': 'application/json',
         'accept': 'application/json',
     }
 
     # Amount of time to wait for API response.
-    TIMEOUT = 10
+    TIMEOUT = 30
 
     # Sumologic timezone to specify.
-    TIMEZONE = 'PST'
+    TIMEZONE = 'EST'
 
     # Amount of time to pause before requesting Sumologic logs.  60 seconds
     # seems to be a good amount of time.
-    SLEEP_SECONDS = 60
+    SLEEP_SECONDS = 10
 
     # The amount of logs to download from Sumologic per page.  The higher this
     # is, the more memory is used, but the faster the exports are.
@@ -80,7 +85,7 @@ class Exporter(object):
         - Setting up class variables.
         """
         if not exists(CONFIG_FILE):
-            print 'No credentials found! Run sumologic-export configure'
+            print('No credentials found! Run sumologic-export configure')
             raise SystemExit()
 
         if not exists('exports'):
@@ -88,7 +93,7 @@ class Exporter(object):
 
         with open(CONFIG_FILE, 'rb') as cfg:
             creds = loads(cfg.read())
-            self.credentials = (creds['email'], creds['password'])
+            self.credentials = (creds['access_id'], creds['access_key'])
 
         self.cookies = None
 
@@ -106,11 +111,11 @@ class Exporter(object):
             try:
                 self.start = datetime.strptime(start, '%Y-%m-%d').replace(hour=0, minute=0, second=0, microsecond=0)
             except:
-                print 'Invalid date format. Format must be YYYY-MM-DD.'
+                print('Invalid date format. Format must be YYYY-MM-DD.')
                 raise SystemExit(1)
 
             if self.start > datetime.now():
-                print 'Start date must be in the past!'
+                print('Start date must be in the past!')
                 raise SystemExit(1)
         else:
             self.start = (datetime.now() - self.DEFAULT_TIMERANGE).replace(hour=0, minute=0, second=0, microsecond=0)
@@ -119,11 +124,11 @@ class Exporter(object):
             try:
                 self.stop = datetime.strptime(stop, '%Y-%m-%d').replace(hour=0, minute=0, second=0, microsecond=0)
             except:
-                print 'Invalid date format. Format must be YYYY-MM-DD.'
+                print('Invalid date format. Format must be YYYY-MM-DD.')
                 raise SystemExit(1)
 
             if self.stop > datetime.now():
-                print 'Stop date must be in the past!'
+                print('Stop date must be in the past!')
                 raise SystemExit(1)
         else:
             self.stop = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
@@ -141,20 +146,17 @@ class Exporter(object):
         # Validate / cleanup the date inputs.
         self.init_dates(start, stop)
 
-        print 'Exporting all logs from: %s to %s... This may take a while.\n' % (
-            prettify(self.start),
-            prettify(self.stop),
-        )
+        print(f'Exporting all logs from: {prettify(self.start)} to {prettify(self.stop)}... This may take a while.\n')
 
-        print 'Exporting Logs'
-        print '--------------'
+        print('Exporting Logs')
+        print('--------------')
 
         date = self.start
         while date < self.stop:
 
             # Schedule the Sumologic job.
             job_url = self.create_job(date, date + self.INCREMENT)
-            print '-', prettify(date)
+            print('-', prettify(date))
 
             # Pause to allow Sumologic to process this job.
             sleep(self.SLEEP_SECONDS)
@@ -164,25 +166,25 @@ class Exporter(object):
 
             # If there are logs to be downloaded, let's do it.
             if total_logs:
-                print ' - Downloading %d logs.' % total_logs
+                print(f' - Downloading {total_logs} logs.')
 
                 logs = []
                 for log in self.get_logs(job_url, total_logs):
                     logs.append(log)
 
-                print ' - Writing log file: exports/%s.json' % prettify(date)
-                with open('exports/%s.json' % prettify(date), 'wb') as exports:
+                print(f' - Writing log file: exports/{prettify(date)}.json')
+                with open(f'exports/{prettify(date)}.json', 'w') as exports:
                     exports.write(dumps(logs, indent=2, sort_keys=True))
 
-                print ' - Compressing log file: exports/%s.json' % prettify(date)
-                call(['gzip', '-9', 'exports/%s.json' % prettify(date)])
+                print(f' - Compressing log file: exports/{prettify(date)}.json')
+                call(['gzip', '-9', f'exports/{prettify(date)}.json'])
             else:
-                print ' - No logs found.'
+                print(' - No logs found.')
 
             # Move forward.
             date += self.INCREMENT
 
-        print '\nFinished downloading logs!'
+        print('\nFinished downloading logs!')
 
     def create_job(self, start, stop):
         """
@@ -202,7 +204,8 @@ class Exporter(object):
                     headers = self.SUMOLOGIC_HEADERS,
                     timeout = self.TIMEOUT,
                     data = dumps({
-                        'query': '*',
+                        # 'query': '*',
+                        'query': '_index=' + self.PARTITION + ' | fields _messagetime, _sourceName, _sourceCategory, _sourceHost, _raw',
                         'from': start.isoformat(),
                         'to': stop.isoformat(),
                         'timeZone': self.TIMEZONE,
@@ -213,6 +216,7 @@ class Exporter(object):
                     self.cookies = resp.cookies
 
                 if resp.status_code == 202:
+                    print('%s/%s' % (self.SUMOLOGIC_URL, resp.json()['id']))
                     return '%s/%s' % (self.SUMOLOGIC_URL, resp.json()['id'])
 
                 raise
@@ -235,13 +239,14 @@ class Exporter(object):
                     auth = self.credentials,
                     headers = self.SUMOLOGIC_HEADERS,
                     timeout = self.TIMEOUT,
-                    cookies = self.cookies,
+                    cookies = self.cookies
                 )
                 if resp.cookies:
                     self.cookies = resp.cookies
-
+                print(resp.status_code)
                 if resp.status_code == 200:
                     json = resp.json()
+                    print(json['state'])
                     if json['state'] == 'DONE GATHERING RESULTS':
                         return json['messageCount']
 
@@ -260,8 +265,9 @@ class Exporter(object):
         :returns: A generator which returns a single JSON log until all logs have
             been retrieved.
         """
-        for page in xrange(0, (count / self.MESSAGES_PER_PAGE) + 1):
+        for page in range(0, int(count / self.MESSAGES_PER_PAGE) + 1):
             while True:
+                print(f'fetching page {page} of {count/self.MESSAGES_PER_PAGE}')
                 try:
                     resp = get(
                         job_url + '/messages',
@@ -269,14 +275,14 @@ class Exporter(object):
                         headers = self.SUMOLOGIC_HEADERS,
                         timeout = self.TIMEOUT,
                         params = {
-                            'limit': self.MESSAGES_PER_PAGE,
-                            'offset': self.MESSAGES_PER_PAGE * page,
+                            'limit': int(self.MESSAGES_PER_PAGE),
+                            'offset': int(self.MESSAGES_PER_PAGE * page),
                         },
                         cookies = self.cookies,
                     )
                     if resp.cookies:
                         self.cookies = resp.cookies
-
+                    print(resp.status_code)
                     if resp.status_code == 200:
                         json = resp.json()
                         for log in json['messages']:
@@ -286,6 +292,7 @@ class Exporter(object):
 
                     raise
                 except:
+                    print('exception')
                     sleep(1)
 
 
@@ -295,28 +302,28 @@ def configure():
 
     Credentials will be stored in ~/.sumo
     """
-    print 'Initializing `sumologic-export`...\n'
-    print "To get started, we'll need to get your Sumologic credentials."
+    print('Initializing `sumologic-export`...\n')
+    print("To get started, we'll need to get your Sumologic credentials.")
 
     while True:
-        email = raw_input('Enter your email: ').strip()
-        password = raw_input('Enter your password: ').strip()
-        if not (email or password):
-            print '\nYour Sumologic credentials are needed to continue!\n'
+        access_id = input('Enter your access id: ').strip()
+        access_key = input('Enter your access key: ').strip()
+        if not (access_id or access_key):
+            print('\nYour Sumologic credentials are needed to continue!\n')
             continue
 
-        print 'Your API credentials are stored in the file:', CONFIG_FILE, '\n'
-        print 'Run sumologic-export for usage information.'
+        print('Your API credentials are stored in the file:', CONFIG_FILE, '\n')
+        print('Run sumologic-export for usage information.')
 
-        with open(CONFIG_FILE, 'wb') as cfg:
+        with open(CONFIG_FILE, 'w') as cfg:
             cfg.write(dumps({
-                'email': email,
-                'password': password,
+                'access_id': access_id,
+                'access_key': access_key,
             }, indent=2, sort_keys=True))
 
         # Make the configuration file only accessible to the current user --
         # this makes the credentials a bit more safe.
-        chmod(CONFIG_FILE, 0600)
+        chmod(CONFIG_FILE, 0o600)
 
         break
 
@@ -328,7 +335,7 @@ def main(args):
     :param args: Command line arguments.
     """
     if args['-v']:
-        print VERSION
+        print(VERSION)
         raise SystemExit()
 
     elif args['configure']:
