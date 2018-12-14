@@ -23,7 +23,7 @@ from __future__ import print_function
 
 from datetime import datetime, timedelta
 from json import dumps, loads
-from os import chmod, mkdir
+from os import chmod, mkdir, walk, remove
 from os.path import exists, expanduser
 from subprocess import call
 from time import sleep
@@ -180,6 +180,7 @@ class Exporter(object):
 
         date = self.start
         q = Queue()
+        r = Queue()
         while date < self.stop:
 
             # Queue up the parts of the job
@@ -188,13 +189,32 @@ class Exporter(object):
             date += self.INCREMENT
 
         for i in range(self.THREADS):
-            t = Thread(target=self.threaded_jobs, args=(q,))
+            t = Thread(target=self.threaded_jobs, args=(q,r))
             t.daemon = True
             t.start()
+        
+        h = Thread(target=self.upload_to_s3, args=(r,))
+        h.daemon = True
+        h.start()
+
         q.join()
         print('\nFinished downloading logs!')
 
-    def threaded_jobs(self, q):
+    def upload_to_s3(self, r):
+        from boto3 import Session
+        session = Session(profile_name='east')
+        s3 = session.resource('s3')
+        bucket = s3.Bucket('as-sumologic-logs')
+        while True:
+            if r.empty():
+
+                sleep(5)
+                continue
+            path, data = r.get()
+            print(f'uploading {path}')
+            bucket.put_object(Key=f'test/script/{path}', Body=data)
+
+    def threaded_jobs(self, q, r):
         while not q.empty():
             job = q.get()
             date = job[0]
@@ -216,9 +236,8 @@ class Exporter(object):
                 for log in self.get_logs(job_url, total_logs):
                     logs.append(log)
 
-                print(f' - Writing log file: exports/{prettify(date)}.json.gz')
-                with gopen(f'exports/{prettify(date)}.json.gz', 'w') as out:
-                    out.write(dumps(logs, indent=2, sort_keys=True).encode())
+                r.put((f'exports/{prettify(date)}.json.gz',
+                       dumps(logs, indent=2, sort_keys=True).encode()))
 
             else:
                 print(' - No logs found.')
