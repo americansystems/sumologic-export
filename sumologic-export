@@ -48,7 +48,7 @@ class Exporter(object):
     """Abstraction for exporting Sumologic logs."""
 
     # Partition name to query (or *)
-    PARTITION = 'zscaler'
+    SCOPE = '_index=zscaler'
 
     # Default time increment to move forward by.
     INCREMENT = timedelta(minutes=5)
@@ -115,7 +115,12 @@ class Exporter(object):
         """
         if start:
             try:
-                self.start = datetime.strptime(start, '%Y-%m-%d').replace(hour=0, minute=0, second=0, microsecond=0)
+                self.start = datetime.strptime(start, '%Y-%m-%d').replace(
+                    hour=0,
+                    minute=0,
+                    second=0,
+                    microsecond=0
+                )
             except:
                 print('Invalid date format. Format must be YYYY-MM-DD.')
                 raise SystemExit(1)
@@ -124,11 +129,21 @@ class Exporter(object):
                 print('Start date must be in the past!')
                 raise SystemExit(1)
         else:
-            self.start = (datetime.now() - self.DEFAULT_TIMERANGE).replace(hour=0, minute=0, second=0, microsecond=0)
+            self.start = (datetime.now() - self.DEFAULT_TIMERANGE).replace(
+                hour=0,
+                minute=0,
+                second=0,
+                microsecond=0
+            )
 
         if stop:
             try:
-                self.stop = datetime.strptime(stop, '%Y-%m-%d').replace(hour=0, minute=0, second=0, microsecond=0)
+                self.stop = datetime.strptime(stop, '%Y-%m-%d').replace(
+                    hour=0,
+                    minute=0,
+                    second=0,
+                    microsecond=0
+                )
             except:
                 print('Invalid date format. Format must be YYYY-MM-DD.')
                 raise SystemExit(1)
@@ -137,7 +152,12 @@ class Exporter(object):
                 print('Stop date must be in the past!')
                 raise SystemExit(1)
         else:
-            self.stop = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+            self.stop = datetime.now().replace(
+                hour=0,
+                minute=0,
+                second=0,
+                microsecond=0
+            )
 
     def export(self, start, stop):
         """
@@ -152,7 +172,8 @@ class Exporter(object):
         # Validate / cleanup the date inputs.
         self.init_dates(start, stop)
 
-        print(f'Exporting all logs from: {prettify(self.start)} to {prettify(self.stop)}... This may take a while.\n')
+        print(f'Exporting all logs from: {prettify(self.start)} to '
+              + f'{prettify(self.stop)}... This may take a while.\n')
 
         print('Exporting Logs')
         print('--------------')
@@ -172,7 +193,7 @@ class Exporter(object):
             t.start()
         q.join()
         print('\nFinished downloading logs!')
-    
+
     def threaded_jobs(self, q):
         while not q.empty():
             job = q.get()
@@ -196,8 +217,8 @@ class Exporter(object):
                     logs.append(log)
 
                 print(f' - Writing log file: exports/{prettify(date)}.json.gz')
-                with gopen(f'exports/{prettify(date)}.json.gz', 'w') as exports:
-                    exports.write(dumps(logs, indent=2, sort_keys=True).encode())
+                with gopen(f'exports/{prettify(date)}.json.gz', 'w') as out:
+                    out.write(dumps(logs, indent=2, sort_keys=True).encode())
 
             else:
                 print(' - No logs found.')
@@ -217,17 +238,19 @@ class Exporter(object):
             try:
                 resp = post(
                     self.SUMOLOGIC_URL,
-                    auth = self.credentials,
-                    headers = self.SUMOLOGIC_HEADERS,
-                    timeout = self.TIMEOUT,
-                    data = dumps({
+                    auth=self.credentials,
+                    headers=self.SUMOLOGIC_HEADERS,
+                    timeout=self.TIMEOUT,
+                    data=dumps({
                         # 'query': '*',
-                        'query': '_index=' + self.PARTITION + ' | fields _messagetime, _sourceName, _sourceCategory, _sourceHost, _raw',
+                        'query': self.SCOPE + \
+                        ' | fields _messagetime, _sourceName,' + \
+                        ' _sourceCategory, _sourceHost, _raw',
                         'from': start.isoformat(),
                         'to': stop.isoformat(),
                         'timeZone': self.TIMEZONE,
                     }),
-                    cookies = self.cookies,
+                    cookies=self.cookies,
                 )
                 if resp.cookies:
                     self.cookies = resp.cookies
@@ -252,10 +275,10 @@ class Exporter(object):
             try:
                 resp = get(
                     job_url,
-                    auth = self.credentials,
-                    headers = self.SUMOLOGIC_HEADERS,
-                    timeout = self.TIMEOUT,
-                    cookies = self.cookies
+                    auth=self.credentials,
+                    headers=self.SUMOLOGIC_HEADERS,
+                    timeout=self.TIMEOUT,
+                    cookies=self.cookies
                 )
                 if resp.cookies:
                     self.cookies = resp.cookies
@@ -276,22 +299,22 @@ class Exporter(object):
         :param int count: The number of logs to retrieve.
 
         :rtype: generator
-        :returns: A generator which returns a single JSON log until all logs have
-            been retrieved.
+        :returns: A generator which returns a single JSON log until all logs
+            have been retrieved.
         """
         for page in range(0, int(count / self.MESSAGES_PER_PAGE) + 1):
             while True:
                 try:
                     resp = get(
                         job_url + '/messages',
-                        auth = self.credentials,
-                        headers = self.SUMOLOGIC_HEADERS,
-                        timeout = self.TIMEOUT,
-                        params = {
+                        auth=self.credentials,
+                        headers=self.SUMOLOGIC_HEADERS,
+                        timeout=self.TIMEOUT,
+                        params={
                             'limit': int(self.MESSAGES_PER_PAGE),
                             'offset': int(self.MESSAGES_PER_PAGE * page),
                         },
-                        cookies = self.cookies,
+                        cookies=self.cookies,
                     )
                     if resp.cookies:
                         self.cookies = resp.cookies
@@ -323,7 +346,7 @@ def configure():
             print('\nYour Sumologic credentials are needed to continue!\n')
             continue
 
-        print('Your API credentials are stored in the file:', CONFIG_FILE, '\n')
+        print('Your API credentials are stored in:', CONFIG_FILE, '\n')
         print('Run sumologic-export for usage information.')
 
         with open(CONFIG_FILE, 'w') as cfg:
