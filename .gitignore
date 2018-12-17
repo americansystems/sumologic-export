@@ -1,5 +1,3 @@
 exports
 dist
 *.egg-info
-Pipfile
-Pipfile.lock

@@ -204,7 +204,7 @@ class Exporter(object):
 
     def upload_to_s3(self, r, bucket):
         from boto3 import Session
-        session = Session(profile_name='east')
+        session = Session(profile_name='default')
         s3 = session.resource('s3')
         bucket = s3.Bucket(bucket)
         while True:
@@ -213,7 +213,7 @@ class Exporter(object):
                 continue
             path, data = r.get()
             print(f'uploading {path}')
-            bucket.put_object(Key=f'test/script/{path}', Body=data)
+            bucket.put_object(Key=f'{path}', Body=data)
 
     def write_to_file(self, r):
         while True:
