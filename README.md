@@ -16,9 +16,10 @@ and store it in gzipped JSON files either locally, or in an S3 bucket.
 ## Installation
 
 To install sumologic-export, make sure you have git, python3 and pipenv installed, then:
-    1. `git clone https://github.com/cafogleman/sumologic-export.git`
-    2. `cd sumologic-export`
-    3. `pipenv install`
+
+    1. git clone https://github.com/cafogleman/sumologic-export.git
+    2. cd sumologic-export
+    3. pipenv install
 
 ## Usage
 
