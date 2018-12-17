@@ -6,12 +6,9 @@ sumologic-export
 Export your Sumologic logs easily and quickly.
 
 Usage:
-    sumologic-export configure
+    sumologic-export --configure
     sumologic-export
     sumologic-export <start> <stop>
-    sumologic-export
-        (<start> | -s <start> | --start <start>)
-        [(<stop> | -t <stop> | --stop <stop>)]
     sumologic-export (-h | --help)
     sumologic-export (-v | --version)
 
@@ -30,8 +27,8 @@ from time import sleep
 from queue import Queue
 from threading import Thread
 from gzip import open as gopen
+from argparse import ArgumentParser
 
-from docopt import docopt
 from requests import get, post
 
 
@@ -48,7 +45,7 @@ class Exporter(object):
     """Abstraction for exporting Sumologic logs."""
 
     # Partition name to query (or *)
-    SCOPE = '_index=zscaler'
+    SCOPE = '*'
 
     # Default time increment to move forward by.
     INCREMENT = timedelta(minutes=5)
@@ -159,7 +156,7 @@ class Exporter(object):
                 microsecond=0
             )
 
-    def export(self, start, stop):
+    def export(self, start, stop, bucket):
         """
         Export all Sumologic logs from start to stop.
 
@@ -189,32 +186,46 @@ class Exporter(object):
             date += self.INCREMENT
 
         for i in range(self.THREADS):
-            t = Thread(target=self.threaded_jobs, args=(q,r))
+            t = Thread(target=self.threaded_download, args=(q, r))
             t.daemon = True
             t.start()
-        
-        h = Thread(target=self.upload_to_s3, args=(r,))
-        h.daemon = True
-        h.start()
+
+        if bucket:
+            h = Thread(target=self.upload_to_s3, args=(r, bucket))
+            h.daemon = True
+            h.start()
+        else:
+            h = Thread(target=self.write_to_file, args=(r,))
+            h.daemon = True
+            h.start()
 
         q.join()
         print('\nFinished downloading logs!')
 
-    def upload_to_s3(self, r):
+    def upload_to_s3(self, r, bucket):
         from boto3 import Session
         session = Session(profile_name='east')
         s3 = session.resource('s3')
-        bucket = s3.Bucket('as-sumologic-logs')
+        bucket = s3.Bucket(bucket)
         while True:
             if r.empty():
-
                 sleep(5)
                 continue
             path, data = r.get()
             print(f'uploading {path}')
             bucket.put_object(Key=f'test/script/{path}', Body=data)
 
-    def threaded_jobs(self, q, r):
+    def write_to_file(self, r):
+        while True:
+            if r.empty():
+                sleep(5)
+                continue
+            path, data = r.get()
+            with gopen(path, 'wb') as fout:
+                print(f'writing {path}')
+                fout.write(data)
+
+    def threaded_download(self, q, r):
         while not q.empty():
             job = q.get()
             date = job[0]
@@ -381,23 +392,57 @@ def configure():
         break
 
 
-def main(args):
+def main():
     """
     Handle command line options.
 
     :param args: Command line arguments.
     """
-    if args['-v']:
+    parser = ArgumentParser(
+        description="Export logs from Sumologic and write to file (or S3)"
+    )
+    parser.add_argument(
+        '--version', '-v',
+        action='store_true',
+        help='Print version and exit'
+    )
+    parser.add_argument(
+        '--configure',
+        action='store_true',
+        help='Configure credentials for use in exporting logs'
+    )
+    parser.add_argument(
+        '--bucket', '-b',
+        default='',
+        type=str,
+        help='Path to S3 bucket for storage'
+    )
+    parser.add_argument(
+        'start',
+        type=str,
+        help='Log start time',
+        nargs='?'
+    )
+    parser.add_argument(
+        'stop',
+        type=str,
+        help='Log stop time',
+        nargs='?'
+    )
+    args = parser.parse_args()
+
+    if args.version:
         print(VERSION)
         raise SystemExit()
 
-    elif args['configure']:
+    elif args.configure:
         configure()
         raise SystemExit()
 
     exporter = Exporter()
-    exporter.export(args['<start>'], args['<stop>'])
+    exporter.export(args.start, args.stop, bucket=args.bucket)
 
 
 if __name__ == '__main__':
-    main(docopt(__doc__, version=VERSION))
+    from sys import exit
+    exit(main())
