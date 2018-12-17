@@ -76,6 +76,7 @@ class Exporter(object):
 
     # Number of threads to create
     THREADS = 10
+    SAVE_THREADS = 5
 
     def __init__(self):
         """
@@ -190,16 +191,18 @@ class Exporter(object):
             t.daemon = True
             t.start()
 
-        if bucket:
-            h = Thread(target=self.upload_to_s3, args=(r, bucket))
-            h.daemon = True
-            h.start()
-        else:
-            h = Thread(target=self.write_to_file, args=(r,))
-            h.daemon = True
-            h.start()
+        for j in range(self.SAVE_THREADS):
+            if bucket:
+                h = Thread(target=self.upload_to_s3, args=(r, bucket))
+                h.daemon = True
+                h.start()
+            else:
+                h = Thread(target=self.write_to_file, args=(r,))
+                h.daemon = True
+                h.start()
 
         q.join()
+        r.join()
         print('\nFinished downloading logs!')
 
     def upload_to_s3(self, r, bucket):
@@ -214,6 +217,7 @@ class Exporter(object):
             path, data = r.get()
             print(f'uploading {path}')
             bucket.put_object(Key=f'{path}', Body=data)
+            r.task_done()
 
     def write_to_file(self, r):
         while True:
@@ -224,6 +228,7 @@ class Exporter(object):
             with gopen(path, 'wb') as fout:
                 print(f'writing {path}')
                 fout.write(data)
+            r.task_done()
 
     def threaded_download(self, q, r):
         while not q.empty():
