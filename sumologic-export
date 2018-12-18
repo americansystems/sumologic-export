@@ -26,7 +26,7 @@ from subprocess import call
 from time import sleep
 from queue import Queue
 from threading import Thread
-from gzip import open as gopen
+from gzip import compress
 from argparse import ArgumentParser
 
 from requests import get, post
@@ -216,7 +216,10 @@ class Exporter(object):
                 continue
             path, data = r.get()
             print(f'uploading {path}')
-            bucket.put_object(Key=f'{path}', Body=data)
+            bucket.put_object(
+                Key=f'{path}',
+                Body=data
+            )
             r.task_done()
 
     def write_to_file(self, r):
@@ -225,7 +228,7 @@ class Exporter(object):
                 sleep(5)
                 continue
             path, data = r.get()
-            with gopen(path, 'wb') as fout:
+            with open(path, 'wb') as fout:
                 print(f'writing {path}')
                 fout.write(data)
             r.task_done()
@@ -253,7 +256,11 @@ class Exporter(object):
                     logs.append(log)
 
                 r.put((f'exports/{prettify(date)}.json.gz',
-                       dumps(logs, indent=2, sort_keys=True).encode()))
+                    compress(
+                        dumps(logs, indent=2, sort_keys=True).encode(),
+                        compresslevel=9
+                    )
+                ))
 
             else:
                 print(' - No logs found.')
