@@ -1,2 +1,2 @@
-include README.md UNLICENSE
+include README.md LICENSE.md
 recursive-include assets *.jpg *.png *.gif
