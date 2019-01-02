@@ -13,7 +13,7 @@ Usage:
     sumologic-export (-v | --version)
 
 Written by Randall Degges (http://www.rdegges.com)
-Updated by Caleb Fogleman, with AMERICAN SYSTEMS (https://americansystems.com)
+Updated by Caleb Fogleman (https://github.com/cafogleman)
 """
 
 from __future__ import print_function
