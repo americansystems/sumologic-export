@@ -2,11 +2,11 @@
 
 Easily export your Sumologic log data.
 
-![Box Sketch](https://github.com/cafogleman/sumologic-export/raw/master/assets/box-sketch.jpg)
+![Box Sketch](https://github.com/americansystems/sumologic-export/raw/master/assets/box-sketch.jpg)
 
 ## Purpose
 
-This is a fork of [sumologic-export](https://github.com/rdegges/sumologic-export) created by [@rdegges](https://github.com/rdegges), modernized for our current use cases.
+This is a fork of [sumologic-export](https://github.com/rdegges/sumologic-export) created by [@rdegges](https://github.com/rdegges), modernized for our current use cases by [@cafogleman](https://github.com/cafogleman).
 
 `sumologic-export` will grab every single Sumologic log you've ever written
 and store it in gzipped JSON files either locally, or in an S3 bucket.
@@ -15,7 +15,7 @@ and store it in gzipped JSON files either locally, or in an S3 bucket.
 
 To install sumologic-export, make sure you have git, python3 and pipenv installed, then:
 
-    1. git clone https://github.com/cafogleman/sumologic-export.git
+    1. git clone https://github.com/americansystems/sumologic-export.git
     2. cd sumologic-export
     3. pipenv install
 
@@ -93,4 +93,4 @@ v0.0.1: 2014-06-25
 
 ## Thanks
 
-Thanks to [@rdegges](https://github.com/rdegges), and [AMERICAN SYSTEMS](https://americansystems.com).
+Thanks to [@rdegges](https://github.com/rdegges) and [Caleb Fogleman](https://github.com/cafogleman)
