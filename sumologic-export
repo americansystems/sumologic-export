@@ -13,7 +13,7 @@ Usage:
     sumologic-export (-v | --version)
 
 Written by Randall Degges (http://www.rdegges.com)
-Updated by Caleb Fogleman
+Updated by Caleb Fogleman, with AMERICAN SYSTEMS (https://americansystems.com)
 """
 
 from __future__ import print_function
@@ -78,6 +78,9 @@ class Exporter(object):
     THREADS = 10
     SAVE_THREADS = 5
 
+    # AWS credential profile for uploading to S3
+    PROFILE = 'default'
+
     def __init__(self):
         """
         Initialize this exporter.
@@ -89,7 +92,7 @@ class Exporter(object):
         - Setting up class variables.
         """
         if not exists(CONFIG_FILE):
-            print('No credentials found! Run sumologic-export configure')
+            print('No credentials found! Run sumologic-export --configure')
             raise SystemExit()
 
         if not exists('exports'):
@@ -166,6 +169,7 @@ class Exporter(object):
 
         :param str start: The datetime at which to start downloading logs.
         :param str stop: The datetime at which to stop downloading logs.
+        :param str bucket: S3 bucket name for uploading to AWS S3
         """
         # Validate / cleanup the date inputs.
         self.init_dates(start, stop)
@@ -206,8 +210,15 @@ class Exporter(object):
         print('\nFinished downloading logs!')
 
     def upload_to_s3(self, r, bucket):
+        """
+        Upload gzipped data to AWS S3 bucket.
+
+        :param Queue r: queue of save jobs to be completed
+        :param string bucket: S3 bucket name for uploading to AWS S3
+        """
+
         from boto3 import Session
-        session = Session(profile_name='default')
+        session = Session(profile_name=self.PROFILE)
         s3 = session.resource('s3')
         bucket = s3.Bucket(bucket)
         while True:
@@ -223,6 +234,11 @@ class Exporter(object):
             r.task_done()
 
     def write_to_file(self, r):
+        """
+        Write gzipped data to a local file.
+
+        :param Queue r: queue of save jobs to be completed
+        """
         while True:
             if r.empty():
                 sleep(5)
@@ -234,6 +250,13 @@ class Exporter(object):
             r.task_done()
 
     def threaded_download(self, q, r):
+        """
+        Function for workers to start and retrieve jobs, gzip logs, and queue
+        them for save, whether local or to cloud, asynchronously.
+
+        :param Queue q: queue of download jobs to be run
+        :param Queue r: queue of save jobs to be completed
+        """
         while not q.empty():
             job = q.get()
             date = job[0]
@@ -255,12 +278,16 @@ class Exporter(object):
                 for log in self.get_logs(job_url, total_logs):
                     logs.append(log)
 
-                r.put((f'exports/{prettify(date)}.json.gz',
-                    compress(
-                        dumps(logs, indent=2, sort_keys=True).encode(),
-                        compresslevel=9
+                # GZIP logs and queue them for save (local or cloud)
+                r.put(
+                    (
+                        f'exports/{prettify(date)}.json.gz',
+                        compress(
+                            dumps(logs, indent=2, sort_keys=True).encode(),
+                            compresslevel=9
+                        )
                     )
-                ))
+                )
 
             else:
                 print(' - No logs found.')
@@ -284,9 +311,8 @@ class Exporter(object):
                     headers=self.SUMOLOGIC_HEADERS,
                     timeout=self.TIMEOUT,
                     data=dumps({
-                        # 'query': '*',
-                        'query': self.SCOPE + \
-                        ' | fields _messagetime, _sourceName,' + \
+                        'query': self.SCOPE +
+                        ' | fields _messagetime, _sourceName,' +
                         ' _sourceCategory, _sourceHost, _raw',
                         'from': start.isoformat(),
                         'to': stop.isoformat(),
@@ -407,8 +433,6 @@ def configure():
 def main():
     """
     Handle command line options.
-
-    :param args: Command line arguments.
     """
     parser = ArgumentParser(
         description="Export logs from Sumologic and write to file (or S3)"

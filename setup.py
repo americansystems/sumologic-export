@@ -8,7 +8,7 @@ setup(
 
     # Basic package information:
     name = 'sumologic-export',
-    version = '0.0.2',
+    version = '0.0.3',
     scripts = ['sumologic-export'],
 
     # Packaging options:
@@ -16,13 +16,13 @@ setup(
     include_package_data = True,
 
     # Package dependencies:
-    install_requires = ['docopt>=0.6.2', 'requests>=2.3.0'],
+    install_requires = ['requests>=2.3.0', 'boto3>=1.9.0'],
 
     # Metadata for PyPI:
-    author = 'Randall Degges',
-    author_email = 'r@rdegges.com',
+    author = 'Caleb Fogleman',
+    author_email = 'caleb.fogleman@americansystems.com',
     license = 'UNLICENSE',
-    url = 'https://github.com/rdegges/sumologic-export',
+    url = 'https://github.com/cafogleman/sumologic-export',
     keywords = ['sumologic', 'logs', 'export', 'utility'],
     description = 'Easily export your Sumologic log data.',
     long_description = 'Easily export your Sumologic log data.',

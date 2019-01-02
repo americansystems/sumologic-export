@@ -2,8 +2,7 @@
 
 Easily export your Sumologic log data.
 
-![Box Sketch](https://github.com/rdegges/sumologic-export/raw/master/assets/box-sketch.jpg)
-
+![Box Sketch](https://github.com/cafogleman/sumologic-export/raw/master/assets/box-sketch.jpg)
 
 ## Purpose
 
@@ -11,7 +10,6 @@ This is a fork of [sumologic-export](https://github.com/rdegges/sumologic-export
 
 `sumologic-export` will grab every single Sumologic log you've ever written
 and store it in gzipped JSON files either locally, or in an S3 bucket.
-
 
 ## Installation
 
@@ -60,7 +58,7 @@ sumologic-export 2018-01-01
 **NOTE**: Depending on how many logs you have, this process may take a while.
 
 Once the process is finished, you'll have an `exports` directory populated with
-gziped JSON files.  There will be one JSON file for each timeslice (defined as a constant), for instance:
+gzipped JSON files.  There will be one JSON file for each timeslice (defined as a constant), for instance:
 
 ```console
 $ ls exports
@@ -72,7 +70,6 @@ If you'd like to export to S3, first make sure you have a default [boto3 profile
 
 For full usage information, run `sumologic-export -h`.
 
-
 ## Help
 
 Need help?  Can't figure something out?  If you think you've found a bug, please
@@ -81,6 +78,7 @@ open an issue on the GitHub issue tracker.
 ## Changelog
 
 v0.0.3: 2018-12-17
+
     - Updated for modern usecases, including multithreading and S3 bucket storage
 
 v0.0.2: 2015-01-19
@@ -92,3 +90,7 @@ v0.0.2: 2015-01-19
 v0.0.1: 2014-06-25
 
     - First release!  Woo!
+
+## Thanks
+
+Thanks to [@rdegges](https://github.com/rdegges), and [AMERICAN SYSTEMS](https://americansystems.com).
